@@ -19,19 +19,15 @@ coco=COCO(annFile)
 # 旋转和缩放
 rotate_rate = 0.2       # 一张图片用旋转的概率
 scaling_rate = 0.2   # 一张图使用缩放的概率
-# bright_rate = 0.3
+
 
 rotate_angle = (-30,30)   # 旋转角度
 scaling_factor = (0.6,1.3)  # False or (0.5,1.5)
-# bright = (0.7,1.3)  # 亮度
 
 
 
 
 
-
-# cats = coco.loadCats(coco.getCatIds())
-# nms=[(cat['name'],cat['id']) for cat in cats]
 
 
 # imgdata为cv.read()的返回,lowerCutoff为最小目标区域面积，upperCutoff为最大目标区域面积(copy move有两个区域，所以最后获得原区域和篡改区域的总面积为这个数字乘2)
@@ -56,67 +52,6 @@ def findAnnotationMatchingCriteria(anns, imgdata, lowerCutoff=0.01, upperCutoff=
             break
 
     return toReturn
-
-# def contrast_brightness_demo(image, c, b):            # 定义方法， c @ contrast  对比度 ; b @ brightness 亮度
-#     h, w, ch = image.shape
-#     blank = np.zeros([h, w, ch], image.dtype)         # 定义一张空白图像
-#     dst = cv2.addWeighted(image, c, blank, 1-c, b)     # 设定权重
-
-
-
-#
-# def getAffineTransformedMask(foreground, binarymask):
-#     indices = np.where(binarymask == 1)
-#     upper = np.min(indices[0])
-#     lower = np.max(indices[0])
-#     left = np.min(indices[1])
-#     right = np.max(indices[1])
-#
-#     width = right - left
-#     height = lower - upper
-#     n = random.randint(10, 30)
-#     hor_right = False if (binarymask.shape[1] - (right + n + width)) <= 0 else True
-#     hor_left = False if (left - (n + width)) <= 0 else True
-#
-#     side = ""
-#     if hor_right == True and hor_left == True:
-#         side = random.sample(["R", "L"], 1)[0]
-#
-#     elif hor_right == True and hor_left == False:
-#         side = "R"
-#
-#     elif hor_right == False and hor_left == True:
-#         side = "L"
-#     else:
-#         return ([], [])
-#
-#     if side == "L":
-#         S = -(width + n)
-#     else:
-#         S = width + n
-#
-#     v = 0
-#     lu = random.randint(0, 1)
-#     if ((upper - 10) > 1 and (binarymask.shape[0] - lower - 10) > 1):
-#         if lu == 1:
-#             v = -random.randint(1, upper - 10)
-#         else:
-#             v = random.randint(1, binarymask.shape[0] - lower - 10)
-#     elif (upper - 10) > 1:
-#         v = -random.randint(1, upper - 10)
-#     elif (binarymask.shape[0] - lower - 10) > 1:
-#         v = random.randint(1, binarymask.shape[0] - lower - 10)
-#     else:
-#         return ([], [])
-#
-#     rows, cols = binarymask.shape
-#     new_binary_mask = []
-#     new_foreground = []
-#     M = np.float32([[1, 0, S], [0, 1, v]])
-#     transformedForeground = cv2.warpAffine(foreground, M, (cols, rows))
-#     transformedBinaryMask = cv2.warpAffine(binarymask, M, (cols, rows))
-#     return (transformedForeground, transformedBinaryMask)
-
 
 
 # 输入的两者一个是前景rgb；一个是灰度图，只有前景值为1；两者形状一样
@@ -183,12 +118,6 @@ def getAffineTransformedMask_2(foreground, binarymask):
     # print(transformedBinaryMask.shape,binarymask.shape,transformedForeground.shape)
 
 
-
-
-
-
-
-
     # 增加旋转和缩放 ==========================================================================================================
 
     indices = np.where(transformedBinaryMask != 0)
@@ -200,16 +129,6 @@ def getAffineTransformedMask_2(foreground, binarymask):
 
     center_x = (left+right)/2   # 中心x坐标
     center_y = (upper+lower)/2  # 中心y坐标
-
-    # h, w, c = transformedForeground.shape
-    # blank = np.zeros([h, w, c], transformedForeground.dtype)  # 定义一张空白图像
-    #
-    # if random.random() < bright_rate:
-    #     c = random.uniform(bright[0], bright[1])
-    #
-    # else:
-    #     c = 1
-
 
 
 
@@ -226,18 +145,13 @@ def getAffineTransformedMask_2(foreground, binarymask):
         scaling_factor_ =1
 
 
-
-
-
-
-
     M = cv2.getRotationMatrix2D((center_x, center_y), rotate_angle_ , scaling_factor_)  # 中间是旋转角度，最后的是缩放系数
     # print(M)
     transformedForeground = cv2.warpAffine(transformedForeground, M, (cols, rows))
     transformedBinaryMask = cv2.warpAffine(transformedBinaryMask, M, (cols, rows))
+
+    
     # 增加旋转 ==========================================================================================================
-
-
 
     # 旋转后再取前景区域
     foreground_1 = transformedForeground.copy()
@@ -250,9 +164,6 @@ def getAffineTransformedMask_2(foreground, binarymask):
     return (foreground_1, transformedBinaryMask)
 
 
-
-
-
 catIds = coco.getCatIds()
 imgIds = coco.getImgIds()
 
@@ -260,9 +171,6 @@ imgIds = coco.getImgIds()
 file_name_list = [((coco.loadImgs(imid)[0])['file_name']) for imid in imgIds]
 # area = [((coco.loadAnns(imid)[0])['area']) for imid in imgIds]
 # print(area)
-
-
-
 
 
 
@@ -278,7 +186,6 @@ path_2 = 'D:/dataset/629_image_t/'
 
 
 image_counter = 0       # 40800
-
 
 
 for imgId, file_name in tqdm_notebook(zip(imgIds, file_name_list)):
@@ -305,9 +212,6 @@ for imgId, file_name in tqdm_notebook(zip(imgIds, file_name_list)):
 
     annIds = coco.getAnnIds(imgIds=imgId, catIds=catIds, iscrowd=None)
 
-    # imgs = coco.loadImgs(imgId)
-    # print(imgs,222)
-    #
 
 
     anns = coco.loadAnns(annIds)
@@ -327,19 +231,6 @@ for imgId, file_name in tqdm_notebook(zip(imgIds, file_name_list)):
     if len(binarymask) == 0:
         continue
 
-
-    # 这步不能加，因为后续旋转的时候，如果只把前景区域旋转吗，则前景区域在边界会和黑色区域做插值，也就是形成黑色边界，所以只能把原图旋转后，再取得前景区域。
-    # foreground = imgdata.copy()
-    # foreground[:, :, 0] = np.array(imgdata[:, :, 0] * binarymask)   # 图像和mask相乘，相当于保留原图上目标的区域
-    # foreground[:, :, 1] = np.array(imgdata[:, :, 1] * binarymask)
-    # foreground[:, :, 2] = np.array(imgdata[:, :, 2] * binarymask)
-    # ===========================================================================================================================
-
-
-    # pyplot.imshow(foreground)
-    # pyplot.show()
-    # print(binarymask,np.min(binarymask),np.max(binarymask),binarymask.shape)
-    # break
 
     # ##获得篡改后的前景(粘贴目标)区域。
     new_foreground, new_binarymask = getAffineTransformedMask_2(imgdata, binarymask)
