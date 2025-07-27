@@ -7,9 +7,6 @@ import torchvision
 from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 
-from vgg16_bn import atrous_spatial_pyramid_pooling
-
-
 class ContinusParalleConv(nn.Module):
     # 一个连续的卷积模块，包含BatchNorm 在前 和 在后 两种模式
     def __init__(self, in_channels, out_channels, pre_Batch_Norm=True):
@@ -45,42 +42,6 @@ def get_topk(x, k=10, dim=-3):
     val, _ = torch.topk(x, k=k, dim=dim)
     return val
 
-class ZeroWindow: # 给输入加权，削弱特征图中每个像素点自身及附近范围对自身的相关性。根据高斯分布削弱
-    def __init__(self):
-        self.store = {}
-
-    def __call__(self, x_in, h, w, rat_s=0.1): #x_in是相似度矩阵,被reshape成了(b, w*h, h, w),h和w是相似度矩阵前面的特征图的高宽
-        sigma = h * rat_s, w * rat_s
-        # c = h * w
-        b, c, h2, w2 = x_in.shape  # b, w*h, h, w
-        key = str(x_in.shape) + str(rat_s)
-        if key not in self.store:
-            ind_r = torch.arange(h2).float()  #[0,1,2,3,...,h-1]
-            ind_c = torch.arange(w2).float()  #[0,1,2,3,...,w-1]
-            ind_r = ind_r.view(1, 1, -1, 1).expand_as(x_in)  #维度扩张+广播,(h) -> (1,1,h,1) -> (b, w*h, h, w)
-            ind_c = ind_c.view(1, 1, 1, -1).expand_as(x_in)  #维度扩张+广播,(w) -> (1,1,1,w) -> (b, w*h, h, w)
-            # ind_r和ind_c可以联合表示格子的位置
-
-            # center
-            c_indices = torch.from_numpy(np.indices((h, w))).float()   #shape=(2,h,w),可以表示格子的位置
-            c_ind_r = c_indices[0].reshape(-1)  #[0,0,0,...,0,   1,1,1,...,1,   2,2,2,...]   #shape=(w*h)
-            c_ind_c = c_indices[1].reshape(-1)  #[0,1,2,...,w-1, 0,1,2,...,w-1, 0,1,2,...]   #shape=(w*h)
-
-            cent_r = c_ind_r.reshape(1, c, 1, 1).expand_as(x_in)  #(w*h) -> (1,w*h,1,1) -> (b, w*h, h, w)
-            cent_c = c_ind_c.reshape(1, c, 1, 1).expand_as(x_in)  #(w*h) -> (1,w*h,1,1) -> (b, w*h, h, w)
-
-            def fn_gauss(x, u, s):  # 高斯分布函数
-                return torch.exp(-(x - u) ** 2 / (2 * s ** 2))
-
-            gaus_r = fn_gauss(ind_r, cent_r, sigma[0]) #(b, w*h, h, w)
-            gaus_c = fn_gauss(ind_c, cent_c, sigma[1]) #(b, w*h, h, w)
-            out_g = 1 - gaus_r * gaus_c
-            out_g = out_g.to(x_in.device)
-            self.store[key] = out_g  # 把新值添加进字典
-        else:
-            out_g = self.store[key]
-        out = out_g * x_in   # 加权，消除自己对自己的相关性。
-        return out
 
 class mobile_Self_Correlation_Per(nn.Module):
     # input:[?,512,32,32] out:[?,115,32,32]
@@ -90,10 +51,6 @@ class mobile_Self_Correlation_Per(nn.Module):
         self.patch_size = patch_size
 
     def forward(self, x):
-
-
-
-
         patch_size = self.patch_size
         b,c,h,w = x.shape[0],x.shape[1],x.shape[2],x.shape[3]
         num_patch_h = int(h/patch_size)
@@ -122,11 +79,9 @@ class mobile_Self_Correlation_Per(nn.Module):
         # [B, P, N, C] -> [BP, N, C]
         x = x.reshape(b * patch_area, num_patches, -1)
 
-
         x = torch.matmul(x, x.transpose(1, 2))  # 相似度矩阵[BP, N, N]
 
         # x = x.contiguous().view(b, num_patches, num_patch_h, num_patch_w)
-
 
         # [BP, N, C] --> [B, P, N, C]
         x = x.contiguous().view(b, patch_area, num_patches, -1)
@@ -144,14 +99,11 @@ class mobile_Self_Correlation_Per(nn.Module):
         return x  # (b, top_k, h, w)
 
 
-class UnetPlusPlus(nn.Module):
+class BCMNet(nn.Module):
     def __init__(self, num_classes, deep_supervision=False):
-        super(UnetPlusPlus, self).__init__()
+        super(BCMNet, self).__init__()
         self.num_classes = num_classes
         self.deep_supervision = deep_supervision
-
-
-
 
         # self.CONV0_4 = ContinusParalleConv(64 * 5, 64, pre_Batch_Norm=True)
 
@@ -163,10 +115,6 @@ class UnetPlusPlus(nn.Module):
         self.stage_1 = ContinusParalleConv(64, 128, pre_Batch_Norm=False)
 
 
-        # self.pool = nn.AvgPool2d(2)
-        # self.pool = nn.MaxPool2d(2)
-
-        #
         self.corr1 = mobile_Self_Correlation_Per(nb_pools=512)
         # self.corr1 = Self_Correlation_Per(nb_pools=512)
 
@@ -182,40 +130,23 @@ class UnetPlusPlus(nn.Module):
             nn.Conv2d(64, self.num_classes, 3, padding=1),
         )
 
-        # self.final_super_0_4 = nn.Sequential(
-        #     nn.BatchNorm2d(64),
-        #     nn.ReLU(),
-        #     nn.Conv2d(64, self.num_classes, 3, padding=1),
-        # )
 
     def forward(self, x):
         x_0_0 = self.stage_0(x)
-        # print(x_0_0.shape,111)
 
         x_1_0 = self.pool_1(x_0_0)
-        # print(x_1_0.shape)
-
-
 
         x_1_0 = self.stage_1(x_1_0)
 
-
-
         x_1_0_corr = self.corr1(x_1_0)
-
-
 
         x_0_3 = self.upsample_0_3(x_1_0_corr)
         x_0_3 = self.CONV0_3(x_0_3)
-
-
 
         if self.deep_supervision:
             # out_put1 = self.final_super_0_1(x_2_1)
             # out_put2 = self.final_super_0_2(x_1_2)
             out_put3 = self.final_super_0_3(x_0_3)
-
-
             return out_put3
         else:
             return self.final_super_0_3(x_0_3)
@@ -257,7 +188,7 @@ if __name__ == "__main__":
     img = torch.from_numpy(img).cuda()
 
     deep_supervision = True
-    model = UnetPlusPlus(num_classes=1, deep_supervision=deep_supervision)
+    model = BCMNet(num_classes=1, deep_supervision=deep_supervision)
 
     # model.load_state_dict(torch.load(r'D:\weights\cisa_test\model_17_148000_0.13829921185970306.pth'))
     model = model.to(device)
@@ -283,21 +214,6 @@ if __name__ == "__main__":
     # plt.show()
 
 
-
-    # print(net)
-    # pred= model(img)
-    # pred = pred.squeeze(0)
-    # pred = pred.squeeze(0)
-    #
-
-
-
-
-    # pred = torch.sigmoid(pred)
-    # pred = pred.cpu().detach().numpy()
-    # pred[pred > 0.5] = 1
-    # pred[pred < 0.5] = 0
-    # plt.imsave(r"C:\Users\tangguo\Desktop\comofod\173_bcm.png", pred)
 
 
 
